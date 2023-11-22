@@ -1,15 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-
-
-
-
-
-
-
-
+#include <stdbool.h>
 
 int count_numbers_in_line(char *line);
 int count_lines(FILE *file);
@@ -18,14 +10,14 @@ void check_command_type(const char *line);
 void allocate_resources(int customer, int request[]);
 void release_resources(int customer, int release[]);
 void get_numbers(FILE *file, int count, int numbers[][count]); 
-int is_safe_state(int customer, int request[], int count_resources, int available[], int customer_resources[][count_resources]);
+bool run_bankers_algorithm(int n, int m, int alloc[n][m], int max[n][m], int avail[m]);
 
 
 
 int main(int argc, char *argv[]) {
     char line[1024];
     int count_resources = 0;
-    int resources[argc-1];
+    int avaliable[argc-1];
 
     FILE *customer_file = fopen("customer.txt", "r");
     if (customer_file == NULL) {
@@ -53,13 +45,13 @@ int main(int argc, char *argv[]) {
     }
 
     for (int i = 0; i < argc - 1; i++) {
-        resources[i] = atoi(argv[i+1]);
+        avaliable[i] = atoi(argv[i+1]);
     }
     rewind(customer_file);
     int customer = count_lines(customer_file);
     printf("Customer: %d\n", customer);
     int whitespace = count_whitespace(commands_file);
-    printf("Commands resources: %d\n", whitespace-1);
+    printf("Commands avaliable: %d\n", whitespace-1);
     if(count_resources != (whitespace - 1) ){
         fprintf(stderr, "Incompatibility between customer.txt and commands.txt\n");
         exit(EXIT_FAILURE);
@@ -83,50 +75,135 @@ int main(int argc, char *argv[]) {
 
 
     for (int i = 0; i < count_resources; i++) {
-        printf("Resource %d: %d\n", i, resources[i]);
+        printf("Resource %d: %d\n", i, avaliable[i]);
     }
 
 
     for (int i = 0; i < customer; i++) {
-        printf("Customer %d resources:", i);
+        printf("Customer %d avaliable:", i);
         for (int j = 0; j < count_resources; j++) {
             printf(" %d", customer_resources[i][j]);
         }
         printf("\n");
     }
     rewind(commands_file);
-    int request[customer][count_resources];
 
-    get_numbers(commands_file, count_resources, request);
+    int count_requests = 0;
 
-    for(int i = 0; i < customer; i++){
+    while(fgets(line, 1024, commands_file) != NULL){
+        if(strstr(line, "RQ") != NULL){
+            count_requests++;
+        }
+    }
+
+    printf("Requests: %d\n", count_requests);
+    rewind(commands_file);
+
+    int request[count_requests][count_resources];
+    int count = 0;
+
+    while (fgets(line, 1024, commands_file) != NULL) {
+        if (strstr(line, "RQ") != NULL) {
+            char* token = strtok(line, " ");
+            token = strtok(NULL, " ");
+            token = strtok(NULL, " ");
+
+            int i = 0;
+            while(token != NULL){
+                request[count][i] = atoi(token);
+                token = strtok(NULL, " ");
+                i++;
+            }
+
+
+            count++;
+        }
+    }
+
+    rewind(commands_file);
+
+    int count_releases = 0;
+    while(fgets(line, 1024, commands_file) != NULL){
+        if(strstr(line, "RL") != NULL){
+            count_releases++;
+        }
+    }
+
+    int release[count_releases][count_resources];
+
+    count = 0;
+
+    rewind(commands_file);
+
+    while (fgets(line, 1024, commands_file) != NULL) {
+        if (strstr(line, "RL") != NULL) {
+            char* token = strtok(line, " ");
+            token = strtok(NULL, " ");
+            token = strtok(NULL, " ");
+
+            int i = 0;
+            while(token != NULL){
+                release[count][i] = atoi(token);
+                token = strtok(NULL, " ");
+                i++;
+            }
+            count++;
+
+        }
+    }
+
+
+    for(int i = 0; i < count_requests; i++){
+        printf("Request %d: ", i);
         for(int j = 0; j < count_resources; j++){
             printf("%d ", request[i][j]);
         }
         printf("\n");
     }
 
+
+    printf("%d\n", request[1][1]);
+
+    for(int i = 0; i < count_releases; i++){
+        printf("Release %d: ", i);
+        for(int j = 0; j < count_resources; j++){
+            printf("%d ", release[i][j]);
+        }
+        printf("\n");
+    }
+
+    rewind(commands_file);
+
+
+    int alloc[customer][count_resources];
+    for(int i = 0; i < customer; i++){
+        for(int j = 0; j < count_resources; j++){
+            alloc[i][j] = 0;
+        }
+    }
+    int customer_number;
+    int count_line = 0;
+    int count_line_release = 0;
     while(fgets(line, 1024, commands_file) != NULL) {
         if (strstr(line, "RQ") != NULL) {
+            
             int flag = 0;
-            int customer_number;
+            
             sscanf(line, "RQ %d", &customer_number);
 
-
-            // Criar uma cópia da linha original
             char line_copy[1024];
             strcpy(line_copy, line);
 
             for (int i = 0; i < count_resources; i++) {
-                printf("%d\n", request[customer_number][i]);
-                if (request[customer_number][i] > customer_resources[customer_number][i]) {
+
+                if (request[count_line][i] > customer_resources[customer_number][i]) {
                     flag = 1;
-                } else if (request[customer_number][i] > resources[i]) {
+                } else if (request[count_line][i] > avaliable[i]) {
                     flag = 2;
                 }
             }
 
-            if(is_safe_state(customer_number, request, count_resources, resources, customer_resources) == 0){
+            if(flag == 0 && run_bankers_algorithm(customer, count_resources, alloc, customer_resources, avaliable) == false){
                 flag = 3;
             }
 
@@ -135,7 +212,7 @@ int main(int argc, char *argv[]) {
                     printf("The customer %d request was denied because exceed its maximum need\n", customer_number);
                     break;
                 case 2:
-                    printf("The resources are not enough to customer %d request\n", customer_number);
+                    printf("The avaliable are not enough to customer %d request\n", customer_number);
                     break;
                 case 3:
                     printf("The customer %d request was denied because result in an unsafe state\n", customer_number);
@@ -143,18 +220,23 @@ int main(int argc, char *argv[]) {
                 default:
                     printf("The customer %d request was accepted\n", customer_number);
                     for(int i = 0; i < count_resources; i++){
-                        resources[i] -= request[customer_number][i];
-                        customer_resources[customer_number][i] += request[customer_number][i];
+                        avaliable[i] -= request[count_line][i]; 
+                        alloc[customer_number][i] += request[count_line][i];
+                        printf("Request %d: %d\n", i, request[count_line][i]);
+                        printf("Resource %d: %d\n", i, avaliable[i]);
+                        printf("Alloc %d: %d\n", i, alloc[customer_number][i]);
                     }
             }
+            count_line++;
         } else if (strstr(line, "RL") != NULL) {
             int customer_number;
             sscanf(line, "RL %d", &customer_number); // Corrigir aqui
             for(int i = 0; i < count_resources; i++){
-                sscanf(line, "%d", &request[customer_number][i]);
-                resources[i] += request[customer_number][i]; // Atualizar recursos disponíveis
-                customer_resources[customer_number][i] -= request[customer_number][i]; // Atualizar recursos alocados para o cliente
+                avaliable[i] += release[count_line_release][i]; // Atualizar recursos disponíveis
+                alloc[customer_number][i] -= release[count_line_release][i];
             }
+            count_line_release++;
+
         } else if (strstr(line, "*") != NULL) {
        
         
@@ -254,46 +336,46 @@ void get_numbers(FILE *file, int count, int numbers[][count]) {
 
 
 
-
-int is_safe_state(int customer, int request[], int count_resources, int available[], int customer_resources[][count_resources]) {
-    int work[count_resources];
-    int finish[customer];
-
-    // Inicialização dos arrays
-    for (int i = 0; i < count_resources; i++) {
-        work[i] = available[i];
+bool run_bankers_algorithm(int n, int m, int alloc[n][m], int max[n][m], int avail[m]) {
+    int i, j, k;
+    int f[n], ans[n], ind = 0;
+    for (k = 0; k < n; k++) {
+        f[k] = 0;
     }
-
-    for (int i = 0; i < customer; i++) {
-        finish[i] = 0;
+    int need[n][m];
+    for (i = 0; i < n; i++) {
+        for (j = 0; j < m; j++)
+            need[i][j] = max[i][j] - alloc[i][j];
     }
-
-    // Simulação da alocação
-    for (int i = 0; i < customer; i++) {
-        if (finish[i] == 0) {
-            int j;
-            for (j = 0; j < count_resources; j++) {
-                if (customer_resources[i][j] > work[j]) { // Correção 1
-                    break;
+    int y = 0;
+    for (k = 0; k < 5; k++) {
+        for (i = 0; i < n; i++) {
+            if (f[i] == 0) {
+                int flag = 0;
+                for (j = 0; j < m; j++) {
+                    if (need[i][j] > avail[j]){
+                        flag = 1;
+                        break;
+                    }
                 }
-            }
-
-            if (j == count_resources) {
-                for (int k = 0; k < count_resources; k++) {
-                    work[k] -= request[k]; // Correção 2
+                if (flag == 0) {
+                    ans[ind++] = i;
+                    for (y = 0; y < m; y++)
+                        avail[y] += alloc[i][y];
+                    f[i] = 1;
                 }
-                finish[i] = 1;
-                i = -1;  // Reinicia a verificação desde o início
             }
         }
     }
-
-    // Verifica se todos os processos foram concluídos
-    for (int i = 0; i < customer; i++) {
-        if (finish[i] == 0) {
-            return 0;  // Não seguro (unsafe) // Correção 3
+    int flag = 1;
+    for(int i=0;i<n;i++) {
+        if(f[i]==0) {
+            flag=0;
+            return false;
         }
     }
-
-    return 1;  // Seguro (safe)
+    if(flag==1) {
+        return true;
+    }
+    return false;
 }
