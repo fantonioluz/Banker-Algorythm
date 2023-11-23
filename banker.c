@@ -6,10 +6,9 @@
 int count_numbers_in_line(char *line);
 int count_lines(FILE *file);
 int count_whitespace(FILE *file);
-void check_command_type(const char *line);
 void allocate_resources(int customer, int request[]);
 void release_resources(int customer, int release[]);
-void get_numbers(FILE *file, int count, int numbers[][count]); 
+void get_request(char *line, int **request); 
 bool run_bankers_algorithm(int n, int m, int alloc[n][m], int max[n][m], int avail[m]);
 
 
@@ -88,91 +87,7 @@ int main(int argc, char *argv[]) {
     }
     rewind(commands_file);
 
-    int count_requests = 0;
 
-    while(fgets(line, 1024, commands_file) != NULL){
-        if(strstr(line, "RQ") != NULL){
-            count_requests++;
-        }
-    }
-
-    printf("Requests: %d\n", count_requests);
-    rewind(commands_file);
-
-    int request[count_requests][count_resources];
-    int count = 0;
-
-    while (fgets(line, 1024, commands_file) != NULL) {
-        if (strstr(line, "RQ") != NULL) {
-            char* token = strtok(line, " ");
-            token = strtok(NULL, " ");
-            token = strtok(NULL, " ");
-
-            int i = 0;
-            while(token != NULL){
-                request[count][i] = atoi(token);
-                token = strtok(NULL, " ");
-                i++;
-            }
-
-
-            count++;
-        }
-    }
-
-    rewind(commands_file);
-
-    int count_releases = 0;
-    while(fgets(line, 1024, commands_file) != NULL){
-        if(strstr(line, "RL") != NULL){
-            count_releases++;
-        }
-    }
-
-    int release[count_releases][count_resources];
-
-    count = 0;
-
-    rewind(commands_file);
-
-    while (fgets(line, 1024, commands_file) != NULL) {
-        if (strstr(line, "RL") != NULL) {
-            char* token = strtok(line, " ");
-            token = strtok(NULL, " ");
-            token = strtok(NULL, " ");
-
-            int i = 0;
-            while(token != NULL){
-                release[count][i] = atoi(token);
-                token = strtok(NULL, " ");
-                i++;
-            }
-            count++;
-
-        }
-    }
-
-
-    for(int i = 0; i < count_requests; i++){
-        printf("Request %d: ", i);
-        for(int j = 0; j < count_resources; j++){
-            printf("%d ", request[i][j]);
-        }
-        printf("\n");
-    }
-
-
-    printf("%d\n", request[1][1]);
-
-    for(int i = 0; i < count_releases; i++){
-        printf("Release %d: ", i);
-        for(int j = 0; j < count_resources; j++){
-            printf("%d ", release[i][j]);
-        }
-        printf("\n");
-    }
-
-    rewind(commands_file);
 
 
     int alloc[customer][count_resources];
@@ -185,9 +100,13 @@ int main(int argc, char *argv[]) {
     int count_line = 0;
     int count_line_release = 0;
     while(fgets(line, 1024, commands_file) != NULL) {
+        int request[count_resources];
+        int release[count_resources];
         if (strstr(line, "RQ") != NULL) {
             
             int flag = 0;
+
+            get_request(line, request);
             
             sscanf(line, "RQ %d", &customer_number);
 
@@ -196,12 +115,13 @@ int main(int argc, char *argv[]) {
 
             for (int i = 0; i < count_resources; i++) {
 
-                if (request[count_line][i] > customer_resources[customer_number][i]) {
+                if (request[i] > customer_resources[customer_number][i]) {
                     flag = 1;
-                } else if (request[count_line][i] > avaliable[i]) {
+                } else if (request[i] > avaliable[i]) {
                     flag = 2;
                 }
             }
+
 
             if(flag == 0 && run_bankers_algorithm(customer, count_resources, alloc, customer_resources, avaliable) == false){
                 flag = 3;
@@ -220,30 +140,49 @@ int main(int argc, char *argv[]) {
                 default:
                     printf("The customer %d request was accepted\n", customer_number);
                     for(int i = 0; i < count_resources; i++){
-                        avaliable[i] -= request[count_line][i]; 
-                        alloc[customer_number][i] += request[count_line][i];
-                        printf("Request %d: %d\n", i, request[count_line][i]);
+                        avaliable[i] -= request[i]; 
+                        alloc[customer_number][i] += request[i];
+                        printf("Request %d: %d\n", i, request[i]);
                         printf("Resource %d: %d\n", i, avaliable[i]);
-                        printf("Alloc %d: %d\n", i, alloc[customer_number][i]);
+                        printf("Alloc[%d][%d]: %d\n",customer_number,i, alloc[customer_number][i]);
                     }
             }
             count_line++;
         } else if (strstr(line, "RL") != NULL) {
             int customer_number;
-            sscanf(line, "RL %d", &customer_number); // Corrigir aqui
+            get_request(line, &release);
+            sscanf(line, "RL %d", &customer_number); 
             for(int i = 0; i < count_resources; i++){
-                avaliable[i] += release[count_line_release][i]; // Atualizar recursos disponíveis
-                alloc[customer_number][i] -= release[count_line_release][i];
+                avaliable[i] += release[i]; 
+                alloc[customer_number][i] -= release[i];
             }
             count_line_release++;
 
         } else if (strstr(line, "*") != NULL) {
-       
+            printf("Avaliable: ");
+            for(int i = 0; i < count_resources; i++){
+                printf("%d ", avaliable[i]);
+            }
+            printf("\n");
+            printf("Alloc: \n");
+            for(int i = 0; i < customer; i++){
+                printf("Customer %d: ", i);
+                for(int j = 0; j < count_resources; j++){
+                    printf("%d ", alloc[i][j]);
+                }
+                printf("\n");
+            }
+            printf("Need: \n");
+            for(int i = 0; i < customer; i++){
+                printf("Customer %d: ", i);
+                for(int j = 0; j < count_resources; j++){
+                    printf("%d ", customer_resources[i][j] - alloc[i][j]);
+                }
+                printf("\n");
+            }
+            printf("\n");
         
-        } else {
-        
-        
-        }
+        } 
     }
 
 
@@ -302,43 +241,23 @@ int count_whitespace(FILE *file) {
 }
 
 
-
-void get_numbers(FILE *file, int count, int numbers[][count]) {
-    char line[1024];
-
-    // Lê linha por linha do arquivo
-    for (int i = 0; i < count; i++) {
-        if (fgets(line, 1024, file) == NULL) {
-            fprintf(stderr, "Error reading numbers from file.\n");
-            exit(EXIT_FAILURE);
-        }
-
-        char *token = strtok(line, " ");
-        int count_numbers = 0;
-
-        // Lê os números separados por espaços
-        while (token != NULL && count_numbers < count) {
-            numbers[i][count_numbers] = atoi(token);
-            count_numbers++;
-
-            token = strtok(NULL, " ");  // Próximos números
-        }
-    }
-
-    // Impressão de debug
-    for (int i = 0; i < count; i++) {
-        for (int j = 0; j < count; j++) {
-            printf("%d ", numbers[i][j]);
-        }
-        printf("\n");
+void get_request(char *line, int **request){
+    char *token = strtok(line, " ");
+    token = strtok(NULL, " ");
+    int count = 0;
+    while (token != NULL) {
+        request[count] = atoi(token);
+        token = strtok(NULL, " ");
+        count++;
     }
 }
 
 
 
+
 bool run_bankers_algorithm(int n, int m, int alloc[n][m], int max[n][m], int avail[m]) {
     int i, j, k;
-    int f[n], ans[n], ind = 0;
+    int f[n];
     for (k = 0; k < n; k++) {
         f[k] = 0;
     }
@@ -359,7 +278,6 @@ bool run_bankers_algorithm(int n, int m, int alloc[n][m], int max[n][m], int ava
                     }
                 }
                 if (flag == 0) {
-                    ans[ind++] = i;
                     for (y = 0; y < m; y++)
                         avail[y] += alloc[i][y];
                     f[i] = 1;
